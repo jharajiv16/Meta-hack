@@ -1,0 +1,12 @@
+environment:
+  name: "AI Startup Founder Simulator"
+  version: "1.0.0"
+  max_months: 60
+  initial_cash: 50000
+  hiring_cost: 5000
+  marketing_cost: 2000
+  feature_cost: 1500
+  burn_rate_per_employee: 1200
+  base_revenue: 500
+  random_event_probability: 0.1
+  funding_probability: 0.2
