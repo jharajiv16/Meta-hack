@@ -174,6 +174,10 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="orange", neutral_hue="slate")) 
 # =========================
 app = gr.mount_gradio_app(app, demo, path="/", ssr_mode=False)
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for pyproject.toml script"""
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=7860)
+
+if __name__ == "__main__":
+    main()
