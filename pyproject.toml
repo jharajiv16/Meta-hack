@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-startup-simulator"
+version = "0.1.0"
+description = "AI Startup Founder Simulator - Meta PyTorch Hackathon"
+authors = [
+    { name = "Rajiv Ranjan Jha" }
+]
+dependencies = [
+    "gradio>=5.12.0",
+    "fastapi",
+    "uvicorn",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "gymnasium",
+    "stable-baselines3",
+    "shimmy",
+    "pillow",
+    "python-dotenv",
+    "pyyaml"
+]
+
+[tool.setuptools]
+packages = ["."]
