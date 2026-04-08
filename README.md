@@ -1,74 +1,176 @@
 ---
-title: Startup Simulator
+title: AI Startup Founder Simulator
 emoji: 🚀
 colorFrom: blue
 colorTo: purple
-sdk: gradio
-sdk_version: 5.12.0
-app_file: app.py
+sdk: docker
+app_file: server/app.py
 pinned: false
+tags:
+  - openenv
 ---
 
 # 🚀 AI Startup Founder Simulator
 
-A reinforcement learning environment and interactive dashboard for simulating the journey of an AI startup founder.
+An **OpenEnv-compliant** reinforcement learning environment that simulates the life of an AI startup founder. Agents must make strategic decisions about hiring, product development, marketing, and fundraising to survive and grow over 60 simulated months.
 
-## 🎯 Project Overview
+## 🎯 Real-World Utility
 
-This project provides a custom Gymnasium environment where an AI agent (or a human player) takes on the role of a startup founder. You'll make critical business decisions each month, including:
+Training AI agents on business strategy is a genuine research challenge. This environment models the complex trade-offs every startup founder faces:
 
-- **Hiring & Firing:** Manage your team size and burn rate.
-- **Product Development:** Build features to improve product quality.
-- **Marketing:** Launch campaigns to increase your reach.
-- **Fundraising:** Pitch to investors for cash injections.
-- **Survival:** Navigate random market crashes and viral growth events.
+- **Cash management** vs. growth investment
+- **Team building** vs. burn rate control
+- **Product quality** vs. speed to market
+- **Technical debt** vs. feature velocity
 
-## 🛠 Project Structure
+Unlike toy environments, every decision has cascading consequences across multiple metrics, requiring long-horizon planning.
 
-- `env.py`: The `StartupEnv` Gymnasium class.
-- `tasks.py`: Evaluation logic for Easy (Survival), Medium (Revenue), and Hard (Valuation) tasks.
-- `inference.py`: Rule-based and PPO agent implementations.
-- `app.py`: Gradio-based interactive dashboard.
-- `test_env.py`: Basic validation script for the environment.
-- `openenv.yaml`: Configuration for environment parameters.
-- `requirements.txt`: Python dependencies.
-- `Dockerfile`: Containerization setup.
+---
 
-## 🚀 Getting Started
+## 📋 Action Space
 
-### 1. Install Dependencies
+The agent chooses **one action per month** from 8 options:
+
+| Action | Cost | Effect |
+|---|---|---|
+| `hire_engineer` | ₹5,000 | +1 team member, +quality, +tech debt |
+| `fire_employee` | Free | -1 team member, **-20% morale** |
+| `build_feature` | ₹1,500 | +quality (scaled by morale & debt) |
+| `run_marketing` | ₹2,000 | +reach (scaled by market sentiment) |
+| `raise_funding` | Free | 20% chance of ₹20k+ injection |
+| `do_nothing` | Free | -2% tech debt (natural recovery) |
+| `pivot` | ₹15,000 | Reset quality to 0.2, **clear all tech debt** |
+| `train_team` | ₹3,000 | +15% morale |
+
+## 📊 Observation Space
+
+Each step returns a `StartupObservation` with these fields:
+
+| Field | Type | Range | Description |
+|---|---|---|---|
+| `month` | int | 0–60 | Current simulation month |
+| `cash` | float | 0–∞ | Available capital (₹) |
+| `team_size` | int | 1–∞ | Number of employees |
+| `product_quality` | float | 0–1 | Product quality score |
+| `marketing_reach` | float | 0–1 | Market penetration |
+| `revenue` | float | 0–∞ | Monthly recurring revenue (₹) |
+| `burn_rate` | float | 0–∞ | Monthly expenses (₹) |
+| `tech_debt` | float | 0–1 | Accumulated technical debt |
+| `team_morale` | float | 0–1 | Team happiness/productivity |
+| `market_sentiment` | float | 0.5–1.5 | External market conditions |
+| `events` | list[str] | — | Random events that occurred |
+| `done` | bool | — | Whether the episode ended |
+| `reward` | float | — | Reward signal for this step |
+
+## 🏆 Tasks (Easy → Medium → Hard)
+
+### Task 1: Runway (Easy)
+**Objective:** Survive for at least 12 months without going bankrupt.
+**Grading:** `score = months_survived / 12` (clamped to 0–1).
+
+### Task 2: Market Fit (Medium)
+**Objective:** Achieve ₹100,000 in monthly revenue at any point.
+**Grading:** `score = best_revenue / 100,000` (clamped to 0–1).
+
+### Task 3: Unicorn (Hard)
+**Objective:** Achieve a valuation of ₹1,000,000 while keeping tech debt low.
+**Valuation** = `revenue × 10 + product_quality × 50,000`, penalised by tech debt.
+**Grading:** `score = best_effective_valuation / 1,000,000` (clamped to 0–1).
+
+---
+
+## ⚙️ Setup & Usage
+
+### Prerequisites
+- Python 3.10+
+- Docker (for containerized deployment)
+
+### Local Development
 
 ```bash
-pip install -r requirements.txt
+# Clone the repository
+git clone https://github.com/jharajiv16/Meta-hack.git
+cd Meta-hack
+
+# Install dependencies
+pip install -e .
+
+# Run the server
+python -m server.app
+# or equivalently:
+uvicorn server.app:app --host 0.0.0.0 --port 7860
 ```
 
-### 2. Run the Simulator (UI)
+### Run Baseline Inference
 
 ```bash
-python app.py
+# Rule-based baseline (no API key needed)
+python inference.py
+
+# With LLM (set environment variables)
+export API_BASE_URL="https://your-api-endpoint/v1"
+export MODEL_NAME="gpt-4o-mini"
+export HF_TOKEN="your-api-key"
+python inference.py
 ```
 
-This will launch a Gradio interface where you can manually step through the simulation or watch an AI agent run.
-
-### 3. Run Validation Tests
+### Docker
 
 ```bash
-python test_env.py
+docker build -t ai-startup-simulator .
+docker run -p 7860:7860 ai-startup-simulator
 ```
 
-## 🧠 Environment Design
+---
 
-- **State:** Cash, Team Size, Product Quality, Marketing Reach, Revenue, Burn Rate, and Month.
-- **Actions:** Discrete actions for founder decisions.
-- **Reward:** Weighted based on revenue growth, product quality, and survival stability.
+## 📈 Baseline Scores (Rule-Based Agent)
 
-## 📦 Deployment
+| Task | Score | Status |
+|---|---|---|
+| runway (Easy) | ~1.00 | ✅ Pass |
+| market_fit (Medium) | ~0.45 | ✅ Pass |
+| unicorn (Hard) | ~0.12 | ❌ Challenging |
 
-This project is compatible with **Hugging Face Spaces**. Simply upload the files and select the Gradio SDK.
+*Scores measured with `seed=42` for reproducibility.*
 
-Alternatively, use the provided `Dockerfile`:
+---
 
-```bash
-docker build -t startup-simulator .
-docker run -p 7860:7860 startup-simulator
+## 🏗️ Project Structure
+
 ```
+├── server/
+│   ├── __init__.py
+│   ├── app.py          # OpenEnv server (FastAPI + WebSocket)
+│   ├── env.py          # Environment (reset/step/state)
+│   ├── models.py       # Pydantic typed models (Action/Observation/State)
+│   ├── tasks.py        # 3 graded tasks with deterministic graders
+│   └── openenv.yaml    # Environment configuration
+├── inference.py        # Baseline inference script (OpenAI client)
+├── openenv.yaml        # Root config (copied into server/)
+├── pyproject.toml      # Project metadata & dependencies
+├── Dockerfile          # Container build
+├── requirements.txt    # Pip requirements
+└── README.md           # This file
+```
+
+## 🎲 Reward Function
+
+The reward function provides continuous signal (not sparse):
+
+```
+reward = (revenue/1000) × 15
+       + product_quality × 100
+       + marketing_reach × 50
+       + team_morale × 40
+       - tech_debt × 60
+       - (burn_rate/1000) × 5
+       + 20 (survival bonus)
+```
+
+Bankruptcy incurs a **-5000 penalty**.
+
+---
+
+## 📜 License
+
+MIT License
