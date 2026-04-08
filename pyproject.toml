@@ -25,7 +25,6 @@ dependencies = [
     "pillow",
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0",
-    "websockets",
 ]
 
 [project.scripts]
