@@ -8,5 +8,11 @@ environment:
   feature_cost: 1500
   burn_rate_per_employee: 1200
   base_revenue: 500
-  random_event_probability: 0.1
+  random_event_probability: 0.15
   funding_probability: 0.2
+  morale_decay_per_month: 0.02
+  morale_recovery_per_training: 0.15
+  tech_debt_increment_per_feature: 0.05
+  tech_debt_increment_per_hire: 0.03
+  pivot_cost: 15000
+  training_cost: 3000

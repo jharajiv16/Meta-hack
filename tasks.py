@@ -41,9 +41,43 @@ def evaluate_hard(trajectory):
     score = min(1.0, max_valuation / 1000000)
     return score
 
+def evaluate_sustainable(trajectory):
+    """Sustainable Growth: Reach ₹500,000 valuation with low tech debt."""
+    if not trajectory:
+        return 0.0
+    
+    valuate_fn = lambda obs: (obs["revenue"][0] * 10) + (obs["product_quality"][0] * 50000)
+    scores = []
+    for obs in trajectory:
+        valuation = valuate_fn(obs)
+        tech_debt = obs["tech_debt"][0]
+        # Penalty for high tech debt
+        effective_valuation = valuation * (1.0 - tech_debt)
+        scores.append(effective_valuation)
+    
+    max_score = max(scores)
+    return min(1.0, max_score / 500000)
+
+def evaluate_morale_leader(trajectory):
+    """Morale Leader: Build a 10+ team with high morale."""
+    if not trajectory:
+        return 0.0
+    
+    scores = []
+    for obs in trajectory:
+        team_size = obs["team_size"][0]
+        morale = obs["team_morale"][0]
+        # Score based on team size (up to 10) and morale
+        score = (min(10, team_size) / 10) * morale
+        scores.append(score)
+    
+    return max(scores)
+
 def get_tasks():
     return [
         Task("Easy", "Survive 12 months without going bankrupt.", evaluate_easy),
         Task("Medium", "Reach ₹100,000 in monthly revenue.", evaluate_medium),
-        Task("Hard", "Reach a valuation of ₹1,000,000.", evaluate_hard)
+        Task("Hard", "Reach a valuation of ₹1,000,000.", evaluate_hard),
+        Task("Sustainable", "Reach ₹500,000 valuation while keeping tech debt low.", evaluate_sustainable),
+        Task("Morale Leader", "Build a team of 10 with morale above 80%.", evaluate_morale_leader)
     ]

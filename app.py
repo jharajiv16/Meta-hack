@@ -1,6 +1,8 @@
 import gradio as gr
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from env import StartupEnv
 from inference import RuleBasedAgent, PPOAgentWrapper
@@ -31,6 +33,8 @@ class SimulatorUI:
             "Quality": float(self.obs["product_quality"][0]),
             "Reach": float(self.obs["marketing_reach"][0]),
             "Revenue": float(self.obs["revenue"][0]),
+            "Tech Debt": float(self.obs["tech_debt"][0]),
+            "Morale": float(self.obs["team_morale"][0]),
             "Events": ", ".join(events)
         })
 
@@ -39,8 +43,14 @@ class SimulatorUI:
         
         # State display
         state_info = f"""
-        **Month:** {int(self.obs["month"][0])} | **Cash:** ₹{float(self.obs["cash"][0]):,.0f} | **Team:** {int(self.obs["team_size"][0])} | **Revenue:** ₹{float(self.obs["revenue"][0]):,.0f} | **Quality:** {float(self.obs["product_quality"][0])*100:.1f}% | **Marketing Reach:** {float(self.obs["marketing_reach"][0])*100:.1f}%
+        **Month:** {int(self.obs["month"][0])} | **Cash:** ₹{float(self.obs["cash"][0]):,.0f} | **Team:** {int(self.obs["team_size"][0])} | **Revenue:** ₹{float(self.obs["revenue"][0]):,.0f}
+        **Quality:** {float(self.obs["product_quality"][0])*100:.1f}% | **Reach:** {float(self.obs["marketing_reach"][0])*100:.1f}% | **Morale:** {float(self.obs["team_morale"][0])*100:.1f}% | **Tech Debt:** {float(self.obs["tech_debt"][0])*100:.1f}%
         """
+        
+        # Sentiment Color
+        sentiment = float(self.obs["market_sentiment"][0])
+        sentiment_label = "Bullish" if sentiment > 1.1 else "Bearish" if sentiment < 0.9 else "Neutral"
+        state_info += f" | **Market:** {sentiment_label} ({sentiment:.2f}x)"
         
         # Plot
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -67,7 +77,9 @@ class SimulatorUI:
             "Build Feature": 2,
             "Run Marketing": 3,
             "Raise Funding": 4,
-            "Do Nothing": 5
+            "Do Nothing": 5,
+            "Pivot": 6,
+            "Train Team": 7
         }
         action = action_map.get(action_idx, 5)
         self.obs, reward, terminated, truncated, self.info = self.env.step(action)
@@ -83,7 +95,7 @@ class SimulatorUI:
         
         while True:
             action = agent.get_action(self.obs)
-            action_name = ["Hire Engineer", "Fire Employee", "Build Feature", "Run Marketing", "Raise Funding", "Do Nothing"][action]
+            action_name = ["Hire Engineer", "Fire Employee", "Build Feature", "Run Marketing", "Raise Funding", "Do Nothing", "Pivot", "Train Team"][action]
             self.obs, reward, terminated, truncated, self.info = self.env.step(action)
             self._record_history(action_name, reward, self.info["events"])
             
@@ -107,7 +119,7 @@ with gr.Blocks(title="AI Startup Founder Simulator") as demo:
         with gr.Column(scale=1):
             with gr.Tab("Manual Decisions"):
                 action_input = gr.Radio(
-                    ["Hire Engineer", "Fire Employee", "Build Feature", "Run Marketing", "Raise Funding", "Do Nothing"],
+                    ["Hire Engineer", "Fire Employee", "Build Feature", "Run Marketing", "Raise Funding", "Do Nothing", "Pivot", "Train Team"],
                     label="Choose Action"
                 )
                 btn_step = gr.Button("Step Simulation", variant="primary")
