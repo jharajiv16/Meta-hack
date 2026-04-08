@@ -1,3 +1,4 @@
+from fastapi import FastAPI
 import gradio as gr
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,6 +6,9 @@ from env import StartupEnv
 import io
 from PIL import Image
 
+# =========================
+# ENV + SIMULATOR CLASS
+# =========================
 class SimulatorUI:
     def __init__(self):
         self.env = StartupEnv()
@@ -42,7 +46,6 @@ class SimulatorUI:
             ax.bar(["Cash", "Revenue"], [cash, revenue])
             ax.set_title("Startup Metrics")
 
-            # Convert plot → Image (FIXED)
             buf = io.BytesIO()
             plt.savefig(buf, format="png")
             buf.seek(0)
@@ -81,8 +84,45 @@ class SimulatorUI:
         except Exception as e:
             return f"❌ ERROR: {str(e)}", None, ""
 
+
+# =========================
+# INIT SIM
+# =========================
 sim = SimulatorUI()
 
+# =========================
+# FASTAPI (FOR HACKATHON CHECKS)
+# =========================
+app = FastAPI()
+
+@app.post("/reset")
+def reset_api():
+    sim.reset_sim()
+    return {"status": "reset done"}
+
+@app.post("/step")
+def step_api(action: int):
+    try:
+        action_map = {
+            0: "Hire Engineer",
+            1: "Fire Employee",
+            2: "Build Feature",
+            3: "Run Marketing",
+            4: "Raise Funding",
+            5: "Do Nothing",
+        }
+
+        sim.step(action_map.get(action, "Do Nothing"))
+
+        return {"status": "step done"}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# =========================
+# GRADIO UI
+# =========================
 with gr.Blocks() as demo:
     gr.Markdown("# 🚀 AI Startup Founder Simulator")
 
@@ -105,4 +145,8 @@ with gr.Blocks() as demo:
     step_btn.click(sim.step, inputs=action, outputs=[state, plot, logs])
     reset_btn.click(sim.reset_sim, outputs=[state, plot, logs])
 
-demo.launch()
+
+# =========================
+# MOUNT BOTH (VERY IMPORTANT)
+# =========================
+app = gr.mount_gradio_app(app, demo, path="/")
