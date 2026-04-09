@@ -45,20 +45,23 @@ TASK_NAMES = ["runway", "market_fit", "unicorn"]
 
 # ------------------------------------------------------------------ #
 # Structured logging helpers (MANDATORY FORMAT)
+# The hackathon validator searches for literal [START], [STEP], [END]
+# markers in stdout. Each marker must appear on its own line.
 # ------------------------------------------------------------------ #
 
 def log_start(task: str, env: str, model: str) -> None:
-    print(json.dumps({
+    data = json.dumps({
         "type": "START",
         "task": task,
         "env": env,
         "model": model,
         "timestamp": time.time(),
-    }), flush=True)
+    })
+    print(f"[START] {data}", flush=True)
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str] = None) -> None:
-    print(json.dumps({
+    data = json.dumps({
         "type": "STEP",
         "step": step,
         "action": action,
@@ -66,11 +69,12 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
         "done": done,
         "error": error,
         "timestamp": time.time(),
-    }), flush=True)
+    })
+    print(f"[STEP] {data}", flush=True)
 
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
-    print(json.dumps({
+    data = json.dumps({
         "type": "END",
         "success": success,
         "steps": steps,
@@ -78,7 +82,9 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
         "total_reward": sum(rewards),
         "rewards": rewards,
         "timestamp": time.time(),
-    }), flush=True)
+    })
+    print(f"[END] {data}", flush=True)
+
 
 
 # ------------------------------------------------------------------ #
@@ -191,6 +197,76 @@ def rule_based_action(obs: Dict[str, Any]) -> str:
 
 
 # ------------------------------------------------------------------ #
+# Agent classes (used by Gradio UI in root app.py)
+# ------------------------------------------------------------------ #
+
+class RuleBasedAgent:
+    """Wrapper class for the rule-based heuristic agent."""
+
+    def get_action(self, obs: Dict[str, Any]) -> int:
+        """Return action index (0-7) based on observation dict."""
+        # Handle numpy array values from gym env
+        def _val(x):
+            try:
+                return float(x[0])
+            except (TypeError, IndexError):
+                return float(x)
+
+        clean_obs = {
+            "cash": _val(obs.get("cash", 50000)),
+            "product_quality": _val(obs.get("product_quality", 0.1)),
+            "marketing_reach": _val(obs.get("marketing_reach", 0.1)),
+            "team_morale": _val(obs.get("team_morale", 1.0)),
+            "team_size": int(_val(obs.get("team_size", 1))),
+            "tech_debt": _val(obs.get("tech_debt", 0.1)),
+        }
+        action_str = rule_based_action(clean_obs)
+        action_map = {
+            "hire_engineer": 0, "fire_employee": 1, "build_feature": 2,
+            "run_marketing": 3, "raise_funding": 4, "do_nothing": 5,
+            "pivot": 6, "train_team": 7,
+        }
+        return action_map.get(action_str, 5)
+
+
+class PPOAgentWrapper:
+    """Placeholder PPO agent — falls back to rule-based until a trained model is available."""
+
+    def __init__(self, model_path: Optional[str] = None):
+        self._fallback = RuleBasedAgent()
+        self._model = None
+        if model_path and os.path.exists(model_path):
+            try:
+                from stable_baselines3 import PPO
+                self._model = PPO.load(model_path)
+            except Exception:
+                pass
+
+    def get_action(self, obs: Dict[str, Any]) -> int:
+        """Return action index (0-7)."""
+        if self._model is not None:
+            try:
+                import numpy as np
+                flat = np.array([
+                    float(obs.get("cash", [50000])[0] if hasattr(obs.get("cash", 50000), '__getitem__') else obs.get("cash", 50000)),
+                    float(obs.get("team_size", [1])[0] if hasattr(obs.get("team_size", 1), '__getitem__') else obs.get("team_size", 1)),
+                    float(obs.get("product_quality", [0.1])[0] if hasattr(obs.get("product_quality", 0.1), '__getitem__') else obs.get("product_quality", 0.1)),
+                    float(obs.get("marketing_reach", [0.1])[0] if hasattr(obs.get("marketing_reach", 0.1), '__getitem__') else obs.get("marketing_reach", 0.1)),
+                    float(obs.get("revenue", [0])[0] if hasattr(obs.get("revenue", 0), '__getitem__') else obs.get("revenue", 0)),
+                    float(obs.get("burn_rate", [1200])[0] if hasattr(obs.get("burn_rate", 1200), '__getitem__') else obs.get("burn_rate", 1200)),
+                    float(obs.get("month", [0])[0] if hasattr(obs.get("month", 0), '__getitem__') else obs.get("month", 0)),
+                    float(obs.get("tech_debt", [0.1])[0] if hasattr(obs.get("tech_debt", 0.1), '__getitem__') else obs.get("tech_debt", 0.1)),
+                    float(obs.get("team_morale", [1.0])[0] if hasattr(obs.get("team_morale", 1.0), '__getitem__') else obs.get("team_morale", 1.0)),
+                    float(obs.get("market_sentiment", [1.0])[0] if hasattr(obs.get("market_sentiment", 1.0), '__getitem__') else obs.get("market_sentiment", 1.0)),
+                ], dtype=np.float32)
+                action, _ = self._model.predict(flat, deterministic=True)
+                return int(action)
+            except Exception:
+                pass
+        return self._fallback.get_action(obs)
+
+
+# ------------------------------------------------------------------ #
 # Main async runner
 # ------------------------------------------------------------------ #
 
@@ -275,22 +351,27 @@ async def main() -> None:
 
     scores = {}
     for task_name in TASK_NAMES:
-        print(f"\n{'='*60}", flush=True)
-        print(f"  Running task: {task_name}", flush=True)
-        print(f"{'='*60}", flush=True)
-        score = await run_task(task_name, use_llm=use_llm)
-        scores[task_name] = score
-        print(f"\n  >> Task '{task_name}' score: {score:.4f}", flush=True)
+        try:
+            score = await run_task(task_name, use_llm=use_llm)
+            scores[task_name] = score
+            print(f"  >> Task '{task_name}' score: {score:.4f}", flush=True)
+        except Exception as exc:
+            print(f"[ERROR] Task '{task_name}' failed: {exc}", flush=True)
+            # Still emit START/END so the validator sees something
+            log_start(task=task_name, env=BENCHMARK, model="error")
+            log_end(success=False, steps=0, score=0.0, rewards=[])
+            scores[task_name] = 0.0
 
-    print(f"\n{'='*60}", flush=True)
-    print("  FINAL SCORES", flush=True)
-    print(f"{'='*60}", flush=True)
-    for name, s in scores.items():
-        status = "✅ PASS" if s >= SUCCESS_SCORE_THRESHOLD else "❌ FAIL"
-        print(f"  {name:20s} : {s:.4f}  {status}", flush=True)
     avg = sum(scores.values()) / len(scores) if scores else 0.0
-    print(f"  {'AVERAGE':20s} : {avg:.4f}", flush=True)
+    print(f"\n  AVERAGE : {avg:.4f}", flush=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as exc:
+        # Last-resort fallback: emit at least one START/END pair
+        print(f"[START] {{\"type\":\"START\",\"task\":\"error\",\"env\":\"ai-startup-simulator\",\"model\":\"error\",\"timestamp\":{time.time()}}}", flush=True)
+        print(f"[ERROR] Fatal error: {exc}", flush=True)
+        print(f"[END] {{\"type\":\"END\",\"success\":false,\"steps\":0,\"score\":0.0,\"total_reward\":0.0,\"rewards\":[],\"timestamp\":{time.time()}}}", flush=True)
+        sys.exit(1)

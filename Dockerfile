@@ -32,5 +32,6 @@ RUN pip install --no-cache-dir -e .
 # Expose port
 EXPOSE 7860
 
-# Launch the OpenEnv-compliant server
+# Launch the OpenEnv-compliant server (server is a package, relative imports work)
 CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
+
